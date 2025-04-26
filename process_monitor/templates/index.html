@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Process Monitor</title>
+
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+      background-color: #f4f6f9;
+    }
+
+    h2 {
+      color: #333;
+    }
+
+    label, input, button {
+      font-size: 16px;
+    }
+
+    #hostname {
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      margin-right: 10px;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .bar-container {
+      background-color: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+      height: 12px;
+    }
+
+    .bar {
+      height: 100%;
+      text-align: right;
+      padding-right: 4px;
+      color: white;
+      font-size: 10px;
+      border-radius: 4px;
+    }
+
+    .cpu-bar {
+      background-color: #ff7f0e;
+    }
+
+    .mem-bar {
+      background-color: #1f77b4;
+    }
+
+    #process-table_wrapper {
+      margin-top: 30px;
+    }
+
+    table.dataTable thead th {
+      background-color: #e8eff5;
+      color: #333;
+    }
+
+    .dataTables_filter input {
+      border-radius: 4px;
+      padding: 5px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h2>Process Monitor</h2>
+  <label>Hostname:
+    <input id="hostname" type="text" value="RonaK" />
+  </label>
+  <button onclick="fetchData()">Refresh</button>
+
+  <table id="process-table" class="display" style="width:100%">
+    <thead>
+      <tr>
+        <th>Process Name</th>
+        <th>PID</th>
+        <th>CPU Usage</th>
+        <th>Memory Usage</th>
+        <th>Parent PID</th>
+        <th>Parent Name</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- jQuery + DataTables -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+  <script>
+    let dataTable;
+
+    async function fetchData() {
+      const hostname = document.getElementById("hostname").value;
+      try {
+        const response = await fetch(`/api/view-processes/?hostname=${hostname}`);
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+        const data = await response.json();
+        populateTable(data);
+      } catch (error) {
+        alert("Error fetching data: " + error.message);
+        console.error("Fetch failed:", error);
+      }
+    }
+
+    function createBar(percent, type) {
+      const width = Math.min(percent, 100); // Cap at 100%
+      const colorClass = type === 'cpu' ? 'cpu-bar' : 'mem-bar';
+      return `
+        <div class="bar-container">
+          <div class="bar ${colorClass}" style="width:${width}%; min-width: 5%;">${width.toFixed(1)}%</div>
+        </div>
+      `;
+    }
+
+    function populateTable(data) {
+      const formatted = data.map(proc => ({
+        name: proc.name,
+        pid: proc.pid,
+        cpu: createBar(proc.cpu, 'cpu'),
+        memory: createBar(proc.memory, 'mem'),
+        parent_pid: proc.parent_pid || '',
+        parent_name: proc.parent_name || ''
+      }));
+
+      if ($.fn.dataTable.isDataTable('#process-table')) {
+        dataTable.clear().rows.add(formatted).draw();
+      } else {
+        dataTable = $('#process-table').DataTable({
+          data: formatted,
+          columns: [
+            { data: 'name' },
+            { data: 'pid' },
+            { data: 'cpu' },
+            { data: 'memory' },
+            { data: 'parent_pid' },
+            { data: 'parent_name' }
+          ],
+          pageLength: 10,
+          responsive: true,
+          columnDefs: [
+            { targets: [2, 3], orderable: false } // Disable sorting on bar columns
+          ],
+          createdRow: function (row, data, dataIndex) {
+            // Enable rendering bars as HTML
+            $('td:eq(2)', row).html(data.cpu);
+            $('td:eq(3)', row).html(data.memory);
+          }
+        });
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", fetchData);
+  </script>
+</body>
+</html>
